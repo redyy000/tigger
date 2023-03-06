@@ -1,0 +1,279 @@
+#!/bin/dash
+
+# commit MOVES files from .index into commit folders inside of .index
+
+# Check for previous tigger-init
+if ! [ -d ".tigger" ]
+then
+    echo "$0: error: tigger repository directory .tigger not found" 1>&2
+    exit 1
+fi
+
+if [ "$1" = "-m" ]
+then
+    # first check whether there is anything to commit inside of .index
+    cd .tigger/.index || exit 1
+    #Using ls to handle alphanumeric filenames
+    if [ "$(ls | wc -c )" = 0 ]
+    then
+        echo "nothing to commit"
+        exit 0
+    fi
+
+    # Flag is changed to 1 if there is a change to a file in .index
+    flag=0
+    # next check if files in .index have changes
+    for f in *
+    do
+        # Check if file exists already in the repo
+        if [ -e "../$f" ]
+        then
+            # If there is a difference, start copying
+            if [ "$(diff "$f" "../$f")" ]
+            then
+                flag=1
+                break
+            # otherwise check the highest commit folder for a difference
+            else
+                num=0
+                while [ -e ".commit.$num" ]
+                do
+                    num=$((num+1))
+                done
+                num=$((num-1))
+                if [ -e ".commit.$num/$f" ]
+                then
+                    if [ "$(diff ".commit.$num/$f" "$f")" ] 2>/dev/null
+                    then
+                        flag=1
+                        break
+                    fi
+                else
+                    flag=1
+                    break
+                fi
+            fi
+        else
+            flag=1
+            break
+        fi
+    done
+    if [ "$flag" = 0 ]
+    then
+        echo "nothing to commit"
+        exit 0
+    fi
+
+    cd "../.." || exit 1
+    num=0
+    while [ -e ".tigger/.index/.commit.$num" ]
+    do
+        num=$((num+1))
+    done
+
+    newdir=".index/.commit.$num"
+    mkdir ".tigger/$newdir"
+
+    cd ".tigger/.index" || exit 1
+
+    if [ $num -ge 1 ]
+    then
+        prevnum=$((num-1))
+        #check prev folder for files not in .index and copy into newest commit folder
+        cd ".commit.$prevnum" || exit 1
+        for f2 in *
+        do
+            if ! [ -e "../$f2" ]
+            then
+                if ! [ -e "../~$f2" ]
+                then
+                    cp "$f2" "../.commit.$num" 2>/dev/null
+                # ~file exists, we dont copy it and we remove the ~file
+                # if file is missing from index, we need to destroy it in repo (--cached was specified)
+                else
+                    rm "../~$f2"
+                    rm "../../$f2" 2>/dev/null
+                fi
+            fi
+        done
+        cd ".." || exit 1
+    fi
+    
+    #copy over every file in index
+    for f in *
+    do
+        #first ignore ~files
+        if [ "$(echo "$f" | cut -b 1)" = "~" ] || [ "$(echo "$f" | cut -b 1)" = "*" ]
+        then
+            continue
+        fi
+        # if there is no ~file
+        if ! [ -e "~$f" ]
+        then
+            #if a file is missing
+            cp "$f" ".." 2>/dev/null
+            mv "$f" ".commit.$num" 2>/dev/null
+        # if there is a ~file in index, do not move into commit folder and do not move into repo 
+        #                               (remove its presence from next commit folder)
+        else
+            rm "../$f" 2>/dev/null
+            rm ".commit.$num/$f" 2>/dev/null
+        fi
+    done
+
+    cd ".commit.$num" 2>/dev/null || exit 1
+    echo "$2">"-msg.txt"
+    echo "Committed as commit $num"
+
+elif [ "$1" = "-a" ]
+then
+    # copy every file that is already in index FROM CURRENT DIRECTORY INTO index
+    # also copy every file in highest commit folder
+    cd ".tigger/.index" || exit 1
+
+    #Using ls to handle alphanumeric filenames
+    if [ "$(ls | wc -c )" -ne 0 ]
+    then
+        for z in *
+        do
+            if [ -e "../../$z" ]
+            then
+                cp "../../$z" "." 2>/dev/null
+            else
+                rm "$z"
+            fi
+        done
+    fi
+
+    num=0
+    while [ -e ".commit.$num" ]
+    do
+        num=$((num+1))
+    done
+    num=$((num-1))
+    cd ".commit.$num" 2>/dev/null || exit 1
+    for z in *
+    do
+        if ! [ "$z" = "-msg.txt" ]
+        then
+            if [ -e "../../../$z" ]
+            then
+                cp "../../../$z" "../" 2>/dev/null
+            else
+                rm "../$z"
+            fi 
+        fi
+    done
+    cd "../" || exit 1
+
+    # resume normal -m
+
+    # Flag is changed to 1 if there is a change to a file in .index
+    flag=0
+    # next check if files in .index have changes
+    for f in *
+    do
+        # Check if file exists already in the repo
+        if [ -e "../$f" ]
+        then
+            # If there is a difference, start copying
+            if [ "$(diff "$f" "../$f")" ]
+            then
+                flag=1
+                break
+            # otherwise check the highest commit folder for a difference
+            else
+                num=0
+                while [ -e ".commit.$num" ]
+                do
+                    num=$((num+1))
+                done
+                num=$((num-1))
+                if [ -e ".commit.$num/$f" ]
+                then
+                    if [ "$(diff ".commit.$num/$f" "$f")" ] 2>/dev/null
+                    then
+                        flag=1
+                        break
+                    fi
+                else
+                    flag=1
+                    break
+                fi
+            fi
+        else
+            flag=1
+            break
+        fi
+    done
+    if [ "$flag" = 0 ]
+    then
+        echo "nothing to commit"
+        exit 0
+    fi
+
+    cd "../.." || exit 1
+    num=0
+    while [ -e ".tigger/.index/.commit.$num" ]
+    do
+        num=$((num+1))
+    done
+
+    newdir=".index/.commit.$num"
+    mkdir ".tigger/$newdir"
+
+    cd ".tigger/.index" || exit 1
+
+    if [ $num -ge 1 ]
+    then
+        prevnum=$((num-1))
+        #check prev folder for files not in .index and copy into newest commit folder
+        cd ".commit.$prevnum" || exit 1
+        for f2 in *
+        do
+            if ! [ -e "../$f2" ]
+            then
+                if ! [ -e "../~$f2" ]
+                then
+                    cp "$f2" "../.commit.$num" 2>/dev/null
+                # ~file exists, we dont copy it and we remove the ~file
+                # if file is missing from index, we need to destroy it in repo (--cached was specified)
+                else
+                    rm "../~$f2"
+                    rm "../../$f2" 2>/dev/null
+                fi
+            fi
+        done
+        cd ".." || exit 1
+    fi
+    
+    #copy over every file in index
+    for f in *
+    do
+        #first ignore ~files
+        if [ "$(echo "$f" | cut -b 1)" = "~" ] || [ "$(echo "$f" | cut -b 1)" = "*" ]
+        then
+            continue
+        fi
+        # if there is no ~file
+        if ! [ -e "~$f" ]
+        then
+            #if a file is missing
+            cp "$f" ".." 2>/dev/null
+            mv "$f" ".commit.$num" 2>/dev/null
+        # if there is a ~file in index, do not move into commit folder and do not move into repo 
+        #                               (remove its presence from next commit folder)
+        else
+            rm "../$f" 2>/dev/null
+            rm ".commit.$num/$f" 2>/dev/null
+        fi
+    done
+
+    cd ".commit.$num" 2>/dev/null || exit 1
+    echo "$2">"-msg.txt"
+    echo "Committed as commit $num"
+
+else
+    echo "usage: tigger-commit [-a] -m commit-message" 1>&2
+    exit 1
+fi

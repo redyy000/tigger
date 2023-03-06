@@ -1,0 +1,151 @@
+#!/bin/dash
+
+# Check for previous tigger-init
+if ! [ -d ".tigger" ]
+then
+    echo "$0: error: tigger repository directory .tigger not found" 1>&2
+    exit 1
+fi
+
+#rm will add the "~file" to index, so that the next commit knows which files to 'delete'
+
+# remove work even if unsaved
+# omit error messages. Can also specify cached
+if [ "$1" = "--force" ]
+then
+    if [ "$2" = "--cached" ]
+    then
+        for x in "$@"
+        do
+            if [ "$x" = "--cached" ] || [ "$x" = "--force" ]
+            then
+                continue
+            fi
+            if ! [ -e ".tigger/$x" ] && ! [ -e ".tigger/.index/$x" ]
+            then
+                echo "$0: error: '$x' is not in the tigger repository" 1>&2
+                exit 1
+            fi
+        done
+        #now add ~file for next commits
+        for x in "$@"
+        do
+            if [ "$x" = "--cached" ] || [ "$x" = "--force" ]
+            then
+                continue
+            fi
+            true >".tigger/.index/~$x"
+            rm ".tigger/.index/$x" 2>/dev/null
+            rm ".tigger/$x" 2>/dev/null
+        done
+    # rm --force (no --cached specified)
+    else
+        for x in "$@"
+        do
+            if [ "$x" = "--force" ]
+            then
+                continue
+            fi
+            if ! [ -e ".tigger/$x" ] && ! [ -e ".tigger/.index/$x" ] 2>/dev/null
+            then
+                echo "$0: error: '$x' is not in the tigger repository" 1>&2
+                exit 1
+            fi
+        done
+        #now add ~file for next commits
+        for x in "$@"
+        do
+            if [ "$x" = "--force" ]
+            then
+                continue
+            fi
+            true >".tigger/.index/~$x"
+            rm "$x" 2>/dev/null
+            rm ".tigger/.index/$x" 2>/dev/null
+        done
+    fi
+
+#rm with only cached
+elif [ "$1" = "--cached" ]
+then
+    for x in "$@"
+    do
+        if [ "$x" = "--cached" ]
+        then
+            continue
+        fi
+        if ! [ -e ".tigger/$x" ] && ! [ -e ".tigger/.index/$x" ]
+        then
+            echo "$0: error: '$x' is not in the tigger repository" 1>&2
+            exit 1
+        fi
+
+        #error checks
+        #first ensure that file exists before testing with diff
+
+        if [ -e ".tigger/$x" ] && [ -e ".tigger/.index/$x" ] && [ -e "$x" ]
+        then
+            if [ "$(diff ".tigger/$x" ".tigger/.index/$x")" ] && [ "$(diff "$x" ".tigger/.index/$x")" ]
+            then
+                echo "$0: error: '$x' in index is different to both the working file and the repository" 1>&2
+                exit 1
+            fi
+        fi
+    done
+    #now add ~file for next commits
+    for x in "$@"
+    do
+        if [ "$x" = "--cached" ]
+        then
+            continue
+        fi
+        true >".tigger/.index/~$x"
+        rm ".tigger/.index/$x" 2>/dev/null
+        rm ".tigger/$x" 2>/dev/null
+    done
+
+#rm with warnings from cd and index
+#check for errors, then delete
+else
+    for x in "$@"
+    do
+        if ! [ -e ".tigger/$x" ] && ! [ -e ".tigger/.index/$x" ] 2>/dev/null
+        then
+            echo "$0: error: '$x' is not in the tigger repository" 1>&2
+            exit 1
+        fi
+
+        #error checks
+        #first ensure that file exists before testing with diff
+        if [ -e ".tigger/$x" ] && [ -e ".tigger/.index/$x" ] && [ -e "$x" ]
+        then
+            if [ "$(diff ".tigger/$x" ".tigger/.index/$x")" ] && [ "$(diff "$x" ".tigger/.index/$x")" ]
+            then
+                echo "$0: error: '$x' in index is different to both the working file and the repository" 1>&2
+                exit 1
+            fi
+        fi
+        if [ -e ".tigger/.index/$x" ]
+        then
+            echo "$0: error: '$x' has staged changes in the index" 1>&2
+            exit 1
+        fi
+
+        if [ -e ".tigger/$x" ] && [ -e "$x" ]
+        then
+            if [ "$(diff ".tigger/$x" "$x")" ]
+            then
+                echo "$0: error: '$x' in the repository is different to the working file" 1>&2
+                exit 1
+            fi
+        fi
+    done
+    #rm after all error checks
+    #add ~file for next commits
+    for x in "$@"
+    do
+        true >".tigger/.index/~$x"
+        rm "$x" 2>/dev/null
+        rm ".tigger/.index/$x" 2>/dev/null
+    done
+fi

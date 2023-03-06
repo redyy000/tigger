@@ -1,0 +1,122 @@
+#!/bin/dash
+
+# TIGGER STATUS DOESN'T WORK (FULLY) - IT WORKS ON FILES IN CURRENT DIRECTORY BUT NOT INDEX OR REPO. IT WORKS A LITTLE BIT THOUGH!
+# I have used grep -E instead of grep -qE because grep -qE doesn't work correctly
+
+# Check for previous tigger-init
+if ! [ -d ".tigger" ]
+then
+    echo "$0: error: tigger repository directory .tigger not found" 1>&2
+    exit 1
+fi
+
+# finds all files in cd
+for f in *
+do
+    if ! [ -e "$f" ]
+    then
+    #file was removed, check if rm or tigger-rm
+    #if ~file exists, then it was tigger-rm
+        if ! [ -e ".tigger/.index/~$f" ]
+        then
+            echo "$f - file deleted"
+            continue
+        elif [ -e ".tigger/$f" ]
+        # exists in the repo, it wasnt --cached, so it was tigger rm
+        then
+            echo "$f - deleted"
+            continue
+        elif [ -e ".tigger/.index/$f" ]
+        then
+            echo "$f - added to index, file deleted"
+            continue
+        else
+            echo "$f - untracked"
+            continue
+        fi
+    fi
+
+    # Find highest commit folder for later
+    num=0
+    while [ -e ".tigger/.index/.commit.$num" ]
+    do
+        num=$((num+1))
+    done
+    num=$((num-1))
+
+    # check if untracked
+    if ! [ -e ".tigger/$f" ] && ! [ -e ".tigger/.index/$f" ]
+    then
+        echo "$f - untracked"
+        continue
+    fi
+
+    if ! [ -e ".tigger/.index/$f" ] && [ -e ".tigger/.index/.commit.$num/$f" ]
+    then
+        if [ "$(diff "$f" ".tigger/.index/.commit.$num/$f")" ]
+        then
+            echo "$f - file changed, changes not staged for commit"
+            continue
+        else
+            echo "$f - same as repo"
+            continue
+        fi
+    fi
+
+    if [ -e ".tigger/.index/$f" ]
+    then
+        if ! [ "$(diff "$f" ".tigger/.index/$f")" ]
+        then
+            #check that it hasnt been comitted yet
+            if [ "$(diff ".tigger/.index/.commit.$num/$f" ".tigger/.index/$f" 2>/dev/null)" ] 
+            then
+                echo "$f - file changed, changes staged for commit"
+                continue 
+            else
+                echo "$f - added to index"
+                continue
+            fi
+        fi
+    fi
+
+
+    # check if the file has been changed in cd
+    # put diff -u output into a temp file, then check if - or + or both exist
+    diff -u "$f" ".tigger/.index/$f" >-"temp.txt"
+    sed -i 1,3d -- "-temp.txt"
+
+    if [ "$(grep -E -- "^-" "-temp.txt")" ]
+    then
+    #check if + exists
+        if [ "$(grep -E -- "^\+" "-temp.txt")" ]
+        then
+            echo "$f - file changed, different changes staged for commit"
+            continue
+        else
+            echo "$f - file changed, changes not staged for commit"
+            continue
+        fi
+    elif [ $(grep -E -- "^+" "-temp.txt") ]
+    then
+        echo "$f - file changed, changes staged for commit"
+        continue
+    else
+        echo "$f - file changed, changes staged for commit"
+        continue
+    fi
+    rm -- "-temp.txt"
+    
+    # now check if its same as repo
+    if [ -e ".tigger/.index/.commit.$num/$f" ]
+    then
+        if ! [ "$(diff ".tigger/.index/.commit.$num/$f" ".tigger/$f")" ]
+        then
+            echo "$f same as repo"
+            continue
+        elif [ "$(diff ".tigger/.index/.commit.$num/$f" ".tigger/.index/$f")" ]
+        then
+            echo "$f added to index"
+            continue
+        fi
+    fi
+done

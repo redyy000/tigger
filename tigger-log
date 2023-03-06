@@ -1,0 +1,24 @@
+#!/bin/dash
+
+# Check for previous tigger-init
+if ! [ -d ".tigger" ]
+then
+    echo "$0: error: tigger repository directory .tigger not found" 1>&2
+    exit 1
+fi
+
+# Find highest commit number, then echo each commit message (stored in -msg.txt) folderwise from most recent commit
+num=0
+while [ -e ".tigger/.index/.commit.$num" ]
+do
+    num=$((num+1))
+done
+
+num=$((num-1))
+
+while [ -e ".tigger/.index/.commit.$num" ]
+do
+    msg="$(cat .tigger/.index/.commit.$num/-msg.txt)"
+    echo "$num $msg"
+    num=$((num-1))
+done

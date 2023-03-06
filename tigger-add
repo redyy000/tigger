@@ -1,0 +1,42 @@
+#!/bin/dash
+
+# "~files" indicate to tigger-add and tigger-commit that a file has been removed with tigger-rm,
+# changing its behaviour
+
+# Check for previous tigger-init
+if ! [ -d ".tigger" ]
+then
+    echo "$0: error: tigger repository directory .tigger not found" 1>&2
+    exit 1
+fi
+
+# Copy each file as long as it exists
+for f in "$@"
+do
+    if ! [ -e "$f" ]
+    # check if it exists in the highest commit folder, if it does then it got removed with rm
+    then
+        num=0
+        while [ -e ".tigger/.index/.commit.$num" ]
+        do
+            num=$((num+1))
+        done
+        num=$((num-1))
+
+        if [ -e ".tigger/.index/.commit.$num" ]
+        # add ~file so that it wont get copied over next commit
+        then
+            true >".tigger/.index/~$f"
+            exit 0
+        else
+            echo "$0: error: can not open '$f'" 1>&2
+            exit 1
+        fi
+    fi
+    # if the ~file exists in .index, then replace it
+    if [ -e ".tigger/.index/~$f" ]
+    then
+        rm ".tigger/.index/~$f"
+    fi
+    cp "$f" ".tigger/.index"
+done

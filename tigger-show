@@ -1,0 +1,63 @@
+#!/bin/dash
+
+# Check for previous tigger-init
+if ! [ -d ".tigger" ]
+then
+    echo "$0: error: tigger repository directory .tigger not found" 1>&2
+    exit 1
+fi
+
+# if the commit is omitted, find the file in the most recent commit folder
+if [ "$(echo "$1" | cut -b 1)" = ":" ] 
+then
+    file=$(echo "$1" | cut -b 2-)
+
+    # if there is no commit 0 folder, then file is in .index
+    if ! [ -e ".tigger/.index/.commit.0" ]
+    then
+        cat ".tigger/.index/$file"
+        exit 0
+    fi
+    # Check index before checking the last commit folder
+    if [ -e ".tigger/.index/$file" ]
+    then
+        cat ".tigger/.index/$file"
+        exit 0
+    fi
+    num=0
+    while [ -e ".tigger/.index/.commit.$num" ]
+    do
+        num=$((num+1))
+    done
+    num=$((num-1))
+    # file is not in last commit folder
+    if ! [ -e ".tigger/.index/.commit.$num/$file" ]
+    then
+        echo "$0: error: '$file' not found in index" 1>&2
+        exit 1
+    fi
+    cat ".tigger/.index/.commit.$num/$file" 2>/dev/null
+    exit 0
+fi
+
+# grep -q will not work the same as grep -E in this scenario
+# error checking user input
+if ! [ "$(echo "$1" | grep -E ':')" ]
+then
+    echo "$0: error: invalid object $1" 1>&2
+    exit 1
+fi
+num=$(echo "$1" | cut -d':' -f1)
+if ! [ -e ".tigger/.index/.commit.$num" ]
+then
+    echo "$0: error: unknown commit '$num'" 1>&2
+    exit 1
+fi
+file=$(echo "$1" | cut -d':' -f2)
+if ! [ -e ".tigger/.index/.commit.$num/$file" ]
+then
+    echo "$0: error: '$file' not found in commit $num" 1>&2
+    exit 1
+fi
+# show the file with num and file extracted from user input
+cat ".tigger/.index/.commit.$num/$file"
